@@ -1,2 +1,3 @@
 # BouncingSharp
-Sample game console application using Visual Studio 2018
+Sample console application with moving # symbol developed using Visual Studio 2018
+
