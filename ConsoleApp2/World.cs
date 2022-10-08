@@ -2,18 +2,21 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace BouncingSharp
 {
     internal class World
     {
-        bool IsLocked = false; 
+        static object lockMe = new object();
+         
         public IMovement PropertyX { get; set; }
         public IMovement PropertyY { get; set; }
 
         public readonly int ScreenHeight;
         public readonly int ScreenWidth;
         List<WorldObject> Content { get; set; }
+        List<WorldObject> LatestContent { get; set; }
         StringBuilder Output { get; set; }
 
         public World(int screenHeight, int screenWidth)
@@ -44,59 +47,73 @@ namespace BouncingSharp
 
         public void DisplayWorld()
         {
+
             Console.Clear();
-            Output = new StringBuilder();
+
+            if (LatestContent == null)
+            {
+                LatestContent = Content.ToList();
+            }
+
+            var latest = LatestContent.ToList();
+
+            var output = new StringBuilder();
 
             for (var x = 0; x < ScreenHeight; x++)
             {
                 var line = "";
                 for (var y = 0; y < ScreenWidth; y++)
-                {
-                    if (Content != null && Content.Exists(o => o.X == x && o.Y == y))
+                { 
+                    foreach(var item in latest)
                     {
-                        line += "#";
-                    }
-                    else
-                    {
-                        line += " ";
-                    }
+                        if (item != null && item.X == x && item.Y == y)
+                        {
+                            line += "#";
+                        }
+                        else
+                        {
+                            line += " ";
+                        }
+                    } 
                 }
-                Output.Append(line);
-                Output.AppendLine();
+                output.Append(line);
+                output.AppendLine();
             }
 
-            Output.AppendLine();
-            Output.AppendLine($"Target X    : {PropertyX.Target.ToString("00")}    |  Target Y    : {PropertyY.Target.ToString("00")}");
-            Output.AppendLine($"Current X   : {Content.First().X.ToString("00")}   |  Current Y   : {Content.First().Y.ToString("00")}");
-            Output.AppendLine($"Direction-X : {PropertyX.Direction} |  Direction-Y : {PropertyY.Direction}");
-            Console.Write(Output);
 
+            //output.AppendLine();
+            //output.AppendLine($"Target X    : {PropertyX.Target.ToString("00")}    |  Target Y    : {PropertyY.Target.ToString("00")}");
+            //output.AppendLine($"Current X   : {Content.First().X.ToString("00")}   |  Current Y   : {Content.First().Y.ToString("00")}");
+            //output.AppendLine($"Direction-X : {PropertyX.Direction} |  Direction-Y : {PropertyY.Direction}");
+            Console.Write(output);
+
+            LatestContent = Content.ToList();
         }
 
         WorldObject NextMove(WorldObject obj)
         {
-            Random r = new Random();
             var tempObjext = new WorldObject()
             {
                 X = obj.X,
                 Y = obj.Y
             };
-
-            tempObjext.X = GetNextPosition(PropertyX, obj.X);
-            tempObjext.Y = GetNextPosition(PropertyY, obj.Y);
+             
+            tempObjext.X = GetNextPosition(PropertyX, obj.X).GetAwaiter().GetResult();
+            tempObjext.Y = GetNextPosition(PropertyY, obj.Y).GetAwaiter().GetResult();
 
             PropertyX = SetNewProperty(PropertyX, tempObjext.X);
             PropertyY = SetNewProperty(PropertyY, tempObjext.Y);
-
+            
             return tempObjext;
         }
 
-        int GetNextPosition(IMovement movement, int currentPosition)
+        async Task<int> GetNextPosition(IMovement movement, int currentPosition)
         {
             int nextPosition = movement.Direction ? currentPosition + 1 : currentPosition - 1;
             nextPosition = nextPosition > movement.Maximum || (!movement.Direction && nextPosition < movement.Target) || (movement.Direction && nextPosition > movement.Target) ? currentPosition : nextPosition;
             nextPosition = nextPosition < 0 ? 0 : nextPosition;
             nextPosition = nextPosition > movement.Maximum ? movement.Maximum : nextPosition;
+
             return nextPosition;
         }
         IMovement SetNewProperty(IMovement m, int nextValue)
@@ -142,23 +159,14 @@ namespace BouncingSharp
 
         public void Process()
         {
-            if (IsLocked) return;
-            IsLocked = true;
-
-            Random r = new Random();
             Content.Where(obj => !string.IsNullOrEmpty(obj.Value)).ToList().ForEach(
-            w =>
-                {
-
-                    WorldObject temp = NextMove(w);
-
-                    Content.Clear();
-                    Content.Add(new WorldObject { X = temp.X, Y = temp.Y, Value = "#" });
-
-                }
-             );
-
-            IsLocked = false;
+        w =>
+            {
+                WorldObject temp = NextMove(w);
+                Content.Clear();
+                Content.Add(new WorldObject { X = temp.X, Y = temp.Y, Value = "#" });
+            }
+         );
         }
 
     }
